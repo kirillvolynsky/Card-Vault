@@ -149,20 +149,48 @@ function renderViewer(){
  applyZoom();
 }
 function flip(){
- if(cards[current]?.back&&zoom===1) $("card").classList.toggle("flipped");
+ const c=cards[current];
+ if(!c?.back)return;
+ $("card").classList.toggle("flipped");
+ applyZoom();
 }
 function next(dir){
  const n=current+dir;
  if(n<0||n>=cards.length)return;
  const stage=$("cardStage");
- stage.classList.remove("slide-left","slide-right","enter-left","enter-right");
- stage.classList.add(dir>0?"slide-left":"slide-right");
+ const oldCard=$("card");
+ if(stage.dataset.animating==="1")return;
+ stage.dataset.animating="1";
+
+ // Keep the current card visible while a second card enters from the
+ // direction of the swipe. This makes the two cards move simultaneously.
+ const incoming=oldCard.cloneNode(true);
+ incoming.id="cardIncoming";
+ incoming.classList.remove("flipped");
+ const nextCard=cards[n];
+ incoming.querySelector(".frontFace img").src=nextCard.front;
+ incoming.querySelector(".backFace img").src=nextCard.back||nextCard.front;
+ incoming.classList.add(dir>0?"incoming-right":"incoming-left");
+ stage.appendChild(incoming);
+
+ oldCard.classList.add(dir>0?"out-left":"out-right");
+ requestAnimationFrame(()=>{
+   requestAnimationFrame(()=>{
+     incoming.classList.remove("incoming-right","incoming-left");
+     incoming.classList.add("incoming-center");
+   });
+ });
+
  setTimeout(()=>{
-   current=n;zoom=1;renderViewer();
-   stage.classList.remove("slide-left","slide-right");
-   stage.classList.add(dir>0?"enter-right":"enter-left");
-   requestAnimationFrame(()=>requestAnimationFrame(()=>stage.classList.remove("enter-right","enter-left")));
- },170);
+   current=n;zoom=1;
+   stage.replaceChildren();
+   const fresh=document.createElement("div");
+   fresh.id="card";fresh.className="card3d";
+   fresh.innerHTML='<div class="face frontFace"><img id="viewFront" alt=""></div><div class="face backFace"><img id="viewBack" alt=""></div>' ;
+   stage.appendChild(fresh);
+   renderViewer();
+   stage.dataset.animating="0";
+ },360);
 }
 
 // Viewer gestures: one-finger swipe/tap + two-finger pinch, using Pointer Events
@@ -192,8 +220,8 @@ function finishPointer(e){
  if(pointers.size===0){
    $("viewer").classList.remove("zooming");
    const dx=e.clientX-gestureStartX,dy=e.clientY-gestureStartY;
-   if(zoom===1&&Math.abs(dx)>55&&Math.abs(dx)>Math.abs(dy)) next(dx<0?1:-1);
-   else if(zoom===1&&!gestureMoved&&Math.abs(dx)<15&&Math.abs(dy)<15) flip();
+   if(Math.abs(dx)>55&&Math.abs(dx)>Math.abs(dy)&&zoom===1) next(dx<0?1:-1);
+   else if(!gestureMoved&&Math.abs(dx)<15&&Math.abs(dy)<15) flip();
  }
 }
 function pointerDistance(){
