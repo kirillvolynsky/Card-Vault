@@ -21,7 +21,28 @@ header{min-height:78px;padding:14px 18px;display:flex;align-items:center;justify
 
 @media (display-mode:standalone){header{padding-top:max(14px,env(safe-area-inset-top));}}
 
-/* Viewer card-to-card swipe: Web Animations API handles the smooth motion. */
+/* Viewer card-to-card swipe: outgoing and incoming cards move together. */
 .cardStage{position:relative;width:100%;height:100%;overflow:visible}
 .cardStage>.card3d{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(1);}
+.cardStage>.card3d.out-left{animation:cardOutLeft .32s cubic-bezier(.22,.7,.2,1) forwards}
+.cardStage>.card3d.out-right{animation:cardOutRight .32s cubic-bezier(.22,.7,.2,1) forwards}
+.cardStage>.card3d.incoming-right{transform:translate(calc(-50% + 110vw),-50%) scale(1)}
+.cardStage>.card3d.incoming-left{transform:translate(calc(-50% - 110vw),-50%) scale(1)}
+.cardStage>.card3d.incoming-center{animation:cardInCenter .32s cubic-bezier(.22,.7,.2,1) forwards}
+@keyframes cardOutLeft{to{transform:translate(calc(-50% - 110vw),-50%) scale(1);opacity:.96}}
+@keyframes cardOutRight{to{transform:translate(calc(-50% + 110vw),-50%) scale(1);opacity:.96}}
+@keyframes cardInCenter{from{opacity:.96}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
 
+/* Ground-up viewer: native horizontal scrolling with one card per snap point. */
+#cardStage{position:fixed;inset:0;width:100%;height:100%;overflow-x:auto;overflow-y:hidden;display:block;scroll-snap-type:x mandatory;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;overscroll-behavior-y:none;touch-action:pan-x pinch-zoom;scrollbar-width:none}
+#cardStage::-webkit-scrollbar{display:none}
+#cardTrack{display:flex;width:max-content;min-width:100%;height:100%}
+.cardSlide{flex:0 0 100vw;width:100vw;height:100%;display:flex;align-items:center;justify-content:center;scroll-snap-align:center;scroll-snap-stop:always;position:relative;overflow:visible}
+.cardSlide>.card3d{width:min(92vw,760px);height:min(88vh,900px);position:relative;transform-style:preserve-3d;perspective:1400px;will-change:transform;transition:transform .5s cubic-bezier(.2,.8,.2,1)}
+.cardSlide>.card3d.flipped{transform:rotateY(180deg)}
+.cardSlide>.card3d.no-back .backFace{display:none}
+.viewer.zooming #cardStage{scroll-snap-type:none}
+.viewer.zooming .cardSlide>.card3d{transition:none}
+.viewer.landscape-lock #cardStage{transform:none;width:100%;height:100%}
+.viewer.landscape-lock .cardSlide>.card3d{width:min(88vh,760px);height:min(88vw,900px)}
+@media(prefers-reduced-motion:reduce){#cardStage{scroll-behavior:auto}.cardSlide>.card3d{transition:none}}

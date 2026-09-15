@@ -139,193 +139,105 @@ function openViewer(i){
  $("viewer").classList.remove("hidden");
  renderViewer();
  updateOrientationLock();
+ requestAnimationFrame(()=>scrollToCard(current,false));
 }
-function cardTransform(x=0, scale=1, flipped=false){
- const rot=flipped?' rotateY(180deg)':'';
- return `translate(calc(-50% + ${x}px), -50%)${rot} scale(${scale})`;
-}
-function makeViewerCard(c, id=null){
- const el=document.createElement("div");
- el.className="card3d swipe-card";
- if(id)el.id=id;
- el.innerHTML='<div class="face frontFace"><img alt=""></div><div class="face backFace"><img alt=""></div>';
- el.querySelector(".frontFace img").src=c.front;
- el.querySelector(".backFace img").src=c.back||c.front;
- el.classList.toggle("no-back",!c.back);
- return el;
+function buildViewerTrack(){
+ const track=$("cardTrack");
+ track.innerHTML="";
+ const list=visibleCards();
+ // Viewer navigation is based on the actual card array, not the thumbnail grid.
+ // Each slide occupies one full viewport, so native scroll-snap can do the hard work.
+ list.forEach((c,i)=>{
+   const slide=document.createElement("div");
+   slide.className="cardSlide";
+   slide.dataset.index=String(cards.indexOf(c));
+   const card=document.createElement("div");
+   card.className="card3d";
+   card.id=i===current?"card":"";
+   card.dataset.index=String(cards.indexOf(c));
+   card.innerHTML=`<div class="face frontFace"><img alt="Card ${cards.indexOf(c)+1}" draggable="false"></div><div class="face backFace"><img alt="Card ${cards.indexOf(c)+1} back" draggable="false"></div>`;
+   card.querySelector(".frontFace img").src=c.front;
+   card.querySelector(".backFace img").src=c.back||c.front;
+   card.classList.toggle("no-back",!c.back);
+   slide.appendChild(card);
+   track.appendChild(slide);
+ });
 }
 function renderViewer(){
- const c=cards[current];
- const stage=$('cardStage');
- stage.replaceChildren(makeViewerCard(c,'card'));
- const card=$('card');
- card.classList.remove('flipped');
+ buildViewerTrack();
  applyZoom();
+}
+function scrollToCard(index,smooth=true){
+ const stage=$("cardStage"), list=visibleCards();
+ const local=list.findIndex(c=>cards.indexOf(c)===index);
+ if(local<0)return;
+ stage.scrollTo({left:local*stage.clientWidth,behavior:smooth?"smooth":"auto"});
+}
+function getCenteredIndex(){
+ const stage=$("cardStage"),list=visibleCards();
+ if(!list.length)return -1;
+ const local=Math.round(stage.scrollLeft/Math.max(1,stage.clientWidth));
+ return cards.indexOf(list[Math.max(0,Math.min(list.length-1,local))]);
 }
 function flip(){
  const c=cards[current];
  if(!c?.back)return;
- $('card').classList.toggle('flipped');
+ const card=$("card");
+ if(!card)return;
+ card.classList.toggle("flipped");
  applyZoom();
 }
-
-// Horizontal card navigation: the current card stays centered while the
-// incoming card is revealed from completely outside the viewport. During a
-// drag the incoming card follows the finger; on release it smoothly completes
-// the remaining 50% and covers the old card.
-let swipeCards=null;
-function cardXTransform(x, scale=1, flipped=false){
- const rot=flipped?' rotateY(180deg)':'';
- return `translate3d(calc(-50% + ${x}px), -50%, 0)${rot} scale(${scale})`;
-}
-function prepareSwipeCards(dir){
- const n=current+dir;
- if(n<0||n>=cards.length)return null;
- const stage=$('cardStage');
- const currentCard=$('card');
- const incoming=makeViewerCard(cards[n]);
- const stageWidth=stage.clientWidth||window.innerWidth;
- const cardWidth=currentCard.getBoundingClientRect().width||Math.min(window.innerWidth*.92,760);
- // The incoming card starts with its nearest edge exactly at the viewport edge.
- // At the end of the finger drag it is 50% visible; release then brings it
- // through the remaining 50% into the centered position.
- const outsideOffset=(stageWidth+cardWidth)/2;
- const revealOffset=stageWidth/2;
- const dragDistance=Math.max(1,cardWidth/2);
- const initialX=dir>0?outsideOffset:-outsideOffset;
- const revealX=dir>0?revealOffset:-revealOffset;
- incoming.style.transition='none';
- incoming.style.transform=cardXTransform(initialX,1,false);
- incoming.style.opacity='1';
- incoming.style.zIndex='2';
- currentCard.style.transition='none';
- currentCard.style.transform=cardXTransform(0,1,currentCard.classList.contains('flipped'));
- currentCard.style.opacity='1';
- currentCard.style.zIndex='1';
- stage.appendChild(incoming);
- swipeCards={dir,n,currentCard,incoming,stageWidth,cardWidth,outsideOffset,revealOffset,dragDistance,initialX,revealX};
- return swipeCards;
-}
-function updateSwipe(dx){
- if(!swipeCards)return;
- const {dir,incoming,initialX,revealX,dragDistance}=swipeCards;
- // Current card deliberately does not move. The incoming card follows the
- // gesture from 0% visible to 50% visible, then waits for release.
- const distance=Math.min(dragDistance,Math.max(0,Math.abs(dx)));
- const progress=distance/dragDistance;
- const x=initialX+(revealX-initialX)*progress;
- incoming.style.transform=cardXTransform(x,1,false);
-}
-function finishSwipe(commit){
- if(!swipeCards)return;
- const {dir,n,currentCard,incoming,initialX,revealX,dragDistance}=swipeCards;
- const m=incoming.style.transform.match(/calc\(-50% \+ (-?[0-9.]+)px/);
- const fromX=m?parseFloat(m[1]):initialX;
- const targetX=commit?0:initialX;
- const distance=Math.abs(targetX-fromX);
- const duration=Math.max(220,Math.min(420,180+distance*.45));
- const ease='cubic-bezier(.22,.75,.2,1)';
- incoming.style.transition=`transform ${duration}ms ${ease}`;
- incoming.style.transform=cardXTransform(targetX,1,false);
- if(!commit){
-   // Current card was never moved, so snapping back only needs to return the
-   // incoming card to its original off-screen position.
-   setTimeout(()=>{
-     if(!swipeCards)return;
-     incoming.remove();
-     currentCard.style.transition='';
-     currentCard.style.transform=cardXTransform(0,1,currentCard.classList.contains('flipped'));
-     swipeCards=null;
-   },duration+20);
-   return;
- }
- setTimeout(()=>{
-   if(!swipeCards)return;
-   current=n;zoom=1;
-   $('cardStage').replaceChildren(makeViewerCard(cards[current],'card'));
-   applyZoom();
-   swipeCards=null;
- },duration+20);
-}
 function next(dir){
- if($('cardStage').dataset.animating==='1')return;
- if(!cards[current+dir])return;
- $('cardStage').dataset.animating='1';
- const sw=prepareSwipeCards(dir);
- if(!sw){$('cardStage').dataset.animating='0';return;}
- requestAnimationFrame(()=>{
-   const duration=360;
-   const ease='cubic-bezier(.22,.75,.2,1)';
-   sw.incoming.style.transition=`transform ${duration}ms ${ease}`;
-   sw.incoming.style.transform=cardXTransform(0,1,false);
-   setTimeout(()=>{
-     current=sw.n;zoom=1;
-     $('cardStage').replaceChildren(makeViewerCard(cards[current],'card'));
-     applyZoom();swipeCards=null;$('cardStage').dataset.animating='0';
-   },duration+20);
- });
+ const n=current+dir;
+ if(n<0||n>=cards.length)return;
+ current=n;
+ scrollToCard(current,true);
 }
 
-// Viewer gestures: one-finger swipe/tap + two-finger pinch, using Pointer Events
-const pointers=new Map();
-let gestureStartX=0,gestureStartY=0,gestureMoved=false,pinchStart=0,zoomStart=1,swipeVelocityX=0,lastGestureX=0,lastGestureTime=0;
-const stage=$('cardStage');
-stage.addEventListener('pointerdown',e=>{
- if(e.pointerType==='mouse'&&e.button!==0)return;
- if(stage.dataset.animating==='1')return;
- pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
- if(pointers.size===1){
-   try{stage.setPointerCapture(e.pointerId)}catch(_){}
-   gestureStartX=e.clientX;gestureStartY=e.clientY;lastGestureX=e.clientX;lastGestureTime=performance.now();
-   gestureMoved=false;swipeVelocityX=0;
+// The viewer is a real horizontal scroll surface. Touch/trackpad drags are native
+// scrolling; CSS scroll-snap settles the nearest card into the exact center.
+const stage=$("cardStage");
+let scrollSnapTimer=0;
+let lastCentered=current;
+stage.addEventListener("scroll",()=>{
+ const idx=getCenteredIndex();
+ if(idx<0)return;
+ if(idx!==lastCentered){
+   lastCentered=idx;
+   current=idx;
+   zoom=1;
+   updateViewerCardState();
  }
- if(pointers.size===2){
-   pinchStart=pointerDistance();zoomStart=zoom;swipeCards=null;
-   stage.classList.add('pinching');
- }
-});
-stage.addEventListener('pointermove',e=>{
- if(!pointers.has(e.pointerId)||stage.dataset.animating==='1')return;
- pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
- if(pointers.size===2){
-   if(pinchStart){zoom=Math.min(4,Math.max(1,zoomStart*(pointerDistance()/pinchStart)));applyZoom();}
-   gestureMoved=true;e.preventDefault();return;
- }
- if(pointers.size!==1)return;
- const dx=e.clientX-gestureStartX,dy=e.clientY-gestureStartY;
- if(Math.hypot(dx,dy)>10){
-   gestureMoved=true;
-   if(zoom===1&&Math.abs(dx)>Math.abs(dy)){
-     e.preventDefault();
-     if(!swipeCards){
-       const dir=dx<0?1:-1;
-       if(!prepareSwipeCards(dir))return;
-     }
-     swipeVelocityX=(e.clientX-lastGestureX)/Math.max(1,performance.now()-lastGestureTime);
-     updateSwipe(dx);
-   }
-   lastGestureX=e.clientX;lastGestureTime=performance.now();
- }
+ clearTimeout(scrollSnapTimer);
+ scrollSnapTimer=setTimeout(()=>{
+   const target=getCenteredIndex();
+   if(target>=0)scrollToCard(target,true);
+ },90);
+},{passive:true});
+
+// Mouse wheel becomes horizontal card scrolling. Trackpads can still use their
+// native horizontal deltas, while a vertical wheel is translated into the same axis.
+stage.addEventListener("wheel",e=>{
+ if($("viewer").classList.contains("hidden"))return;
+ if(Math.abs(e.deltaX)<Math.abs(e.deltaY))e.preventDefault();
+ const delta=Math.abs(e.deltaX)>=Math.abs(e.deltaY)?e.deltaX:e.deltaY;
+ if(Math.abs(delta)<0.5)return;
+ stage.scrollBy({left:delta,behavior:"auto"});
 },{passive:false});
-stage.addEventListener('pointerup',finishPointer);
-stage.addEventListener('pointercancel',finishPointer);
-function finishPointer(e){
- if(!pointers.has(e.pointerId))return;
- pointers.delete(e.pointerId);
- if(pointers.size>0)return;
- stage.classList.remove('pinching');
- if(stage.dataset.animating==='1')return;
- const dx=e.clientX-gestureStartX,dy=e.clientY-gestureStartY;
- if(swipeCards){
-   const velocity=Math.abs(swipeVelocityX);
-   const commit=Math.abs(dx)>=swipeCards.dragDistance || velocity>.55;
-   stage.dataset.animating='1';
-   finishSwipe(commit);
-   setTimeout(()=>stage.dataset.animating='0',commit?420:340);
- }else if(!gestureMoved&&Math.abs(dx)<15&&Math.abs(dy)<15){
-   flip();
+
+function updateViewerCardState(){
+ const track=$("cardTrack");
+ track.querySelectorAll(".card3d").forEach(el=>{
+   const idx=Number(el.dataset.index);
+   if(idx!==current)el.classList.remove("flipped");
+   el.id=idx===current?"card":"";
+ });
+ const card=$("card");
+ if(card){
+   const c=cards[current];
+   card.classList.toggle("no-back",!c?.back);
+   applyZoom();
  }
- swipeVelocityX=0;
 }
 function pointerDistance(){
  const a=[...pointers.values()];
@@ -333,9 +245,41 @@ function pointerDistance(){
 }
 function applyZoom(){
  const card=$("card");
+ if(!card)return;
  const rotation=card.classList.contains("flipped")?" rotateY(180deg)":"";
  card.style.transform=`scale(${zoom})${rotation}`;
  $("viewer").classList.toggle("zooming",zoom>1);
+}
+
+// Pinch zoom is kept, but one-finger movement is deliberately left to the native
+// scroll surface above instead of being interpreted as a swipe command.
+const pointers=new Map();
+let gestureStartX=0,gestureStartY=0,gestureMoved=false,pinchStart=0,zoomStart=1;
+stage.addEventListener("pointerdown",e=>{
+ if(e.pointerType==="mouse"&&e.button!==0)return;
+ pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+ if(pointers.size===1){gestureStartX=e.clientX;gestureStartY=e.clientY;gestureMoved=false;}
+ if(pointers.size===2){pinchStart=pointerDistance();zoomStart=zoom;$("viewer").classList.add("zooming");}
+});
+stage.addEventListener("pointermove",e=>{
+ if(!pointers.has(e.pointerId))return;
+ pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+ if(pointers.size===2){
+   if(pinchStart){zoom=Math.min(4,Math.max(1,zoomStart*(pointerDistance()/pinchStart)));applyZoom();}
+   gestureMoved=true;e.preventDefault();return;
+ }
+ if(pointers.size===1&&Math.hypot(e.clientX-gestureStartX,e.clientY-gestureStartY)>10)gestureMoved=true;
+},{passive:false});
+stage.addEventListener("pointerup",finishPointer);
+stage.addEventListener("pointercancel",finishPointer);
+function finishPointer(e){
+ if(!pointers.has(e.pointerId))return;
+ pointers.delete(e.pointerId);
+ if(pointers.size===0){
+   $("viewer").classList.remove("zooming");
+   pinchStart=0;
+   if(!gestureMoved&&Math.abs(e.clientX-gestureStartX)<15&&Math.abs(e.clientY-gestureStartY)<15&&zoom===1)flip();
+ }
 }
 $("closeViewer").onclick=()=>$("viewer").classList.add("hidden");
 document.addEventListener("keydown",e=>{
