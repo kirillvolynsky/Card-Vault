@@ -157,40 +157,65 @@ function flip(){
 function next(dir){
  const n=current+dir;
  if(n<0||n>=cards.length)return;
+
  const stage=$("cardStage");
  const oldCard=$("card");
  if(stage.dataset.animating==="1")return;
  stage.dataset.animating="1";
 
- // Keep the current card visible while a second card enters from the
- // direction of the swipe. This makes the two cards move simultaneously.
+ // dir > 0 means the user swiped left: the current card exits left
+ // and the next card enters from the right. dir < 0 is the opposite.
  const incoming=oldCard.cloneNode(true);
  incoming.id="cardIncoming";
- incoming.classList.remove("flipped");
+ incoming.className="card3d";
+ incoming.style.transform="";
+ incoming.style.opacity="";
+ incoming.classList.remove("flipped","no-back","out-left","out-right");
  const nextCard=cards[n];
  incoming.querySelector(".frontFace img").src=nextCard.front;
  incoming.querySelector(".backFace img").src=nextCard.back||nextCard.front;
- incoming.classList.add(dir>0?"incoming-right":"incoming-left");
+ incoming.classList.toggle("no-back",!nextCard.back);
  stage.appendChild(incoming);
 
- oldCard.classList.add(dir>0?"out-left":"out-right");
- requestAnimationFrame(()=>{
-   requestAnimationFrame(()=>{
-     incoming.classList.remove("incoming-right","incoming-left");
-     incoming.classList.add("incoming-center");
-   });
- });
+ const distance=`calc(50% + ${dir>0?"110vw":"-110vw"})`;
+ const exitDistance=`calc(-50% + ${dir>0?"-110vw":"110vw"})`;
 
- setTimeout(()=>{
-   current=n;zoom=1;
+ // Use the Web Animations API so both cards interpolate continuously
+ // from their actual starting positions instead of relying on a single
+ // CSS class swap/frame.
+ const easing="cubic-bezier(.22,.75,.18,1)";
+ const duration=420;
+ const oldAnimation=oldCard.animate(
+   [
+     {transform:"translate(-50%,-50%) scale(1)",opacity:1},
+     {transform:`translate(${exitDistance},-50%) scale(.985)`,opacity:.96}
+   ],
+   {duration,easing,fill:"forwards"}
+ );
+ const incomingAnimation=incoming.animate(
+   [
+     {transform:`translate(${distance},-50%) scale(.985)`,opacity:.96},
+     {transform:"translate(-50%,-50%) scale(1)",opacity:1}
+   ],
+   {duration,easing,fill:"forwards"}
+ );
+
+ Promise.all([oldAnimation.finished,incomingAnimation.finished]).then(()=>{
+   current=n;
+   zoom=1;
    stage.replaceChildren();
+
    const fresh=document.createElement("div");
-   fresh.id="card";fresh.className="card3d";
-   fresh.innerHTML='<div class="face frontFace"><img id="viewFront" alt=""></div><div class="face backFace"><img id="viewBack" alt=""></div>' ;
+   fresh.id="card";
+   fresh.className="card3d";
+   fresh.innerHTML='<div class="face frontFace"><img id="viewFront" alt=""></div><div class="face backFace"><img id="viewBack" alt=""></div>';
    stage.appendChild(fresh);
+
    renderViewer();
    stage.dataset.animating="0";
- },360);
+ }).catch(()=>{
+   stage.dataset.animating="0";
+ });
 }
 
 // Viewer gestures: one-finger swipe/tap + two-finger pinch, using Pointer Events

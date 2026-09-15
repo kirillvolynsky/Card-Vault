@@ -21,14 +21,7 @@ header{min-height:78px;padding:14px 18px;display:flex;align-items:center;justify
 
 @media (display-mode:standalone){header{padding-top:max(14px,env(safe-area-inset-top));}}
 
-/* Viewer card-to-card swipe: the two cards travel horizontally together. */
+/* Viewer card-to-card swipe: Web Animations API handles the smooth motion. */
 .cardStage{position:relative;width:100%;height:100%;overflow:visible}
-.cardStage>.card3d{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(1);transition:none;will-change:transform,opacity}
-.cardStage>.card3d.out-left{animation:cardOutLeft .42s cubic-bezier(.22,.75,.2,1) both}
-.cardStage>.card3d.out-right{animation:cardOutRight .42s cubic-bezier(.22,.75,.2,1) both}
-.cardStage>.card3d.incoming-right{animation:cardInFromRight .42s cubic-bezier(.22,.75,.2,1) both}
-.cardStage>.card3d.incoming-left{animation:cardInFromLeft .42s cubic-bezier(.22,.75,.2,1) both}
-@keyframes cardOutLeft{from{transform:translate(-50%,-50%) scale(1);opacity:1}to{transform:translate(calc(-50% - 110vw),-50%) scale(1);opacity:1}}
-@keyframes cardOutRight{from{transform:translate(-50%,-50%) scale(1);opacity:1}to{transform:translate(calc(-50% + 110vw),-50%) scale(1);opacity:1}}
-@keyframes cardInFromRight{from{transform:translate(calc(-50% + 110vw),-50%) scale(1);opacity:1}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
-@keyframes cardInFromLeft{from{transform:translate(calc(-50% - 110vw),-50%) scale(1);opacity:1}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
+.cardStage>.card3d{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(1);}
+
