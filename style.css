@@ -38,7 +38,7 @@ header{min-height:78px;padding:14px 18px;display:flex;align-items:center;justify
 #cardStage::-webkit-scrollbar{display:none}
 #cardTrack{display:flex;width:max-content;min-width:100%;height:100%}
 .cardSlide{flex:0 0 100vw;width:100vw;height:100%;display:flex;align-items:center;justify-content:center;scroll-snap-align:center;scroll-snap-stop:always;position:relative;overflow:visible}
-.cardSlide>.card3d{width:min(92vw,760px);height:min(88vh,900px);position:relative;transform-style:preserve-3d;perspective:1400px;will-change:transform;transition:transform .5s cubic-bezier(.2,.8,.2,1)}
+.cardSlide>.card3d{width:min(92vw,760px,70vh);aspect-ratio:3/4;height:auto;max-height:88vh;position:relative;transform-style:preserve-3d;perspective:1400px;will-change:transform;transition:transform .5s cubic-bezier(.2,.8,.2,1)}
 .cardSlide>.card3d.flipped{transform:rotateY(180deg)}
 .cardSlide>.card3d.no-back .backFace{display:none}
 .viewer.zooming #cardStage{scroll-snap-type:none}
@@ -66,6 +66,14 @@ body.liquid-glass .segmented button{padding:7px 9px;border-radius:9px;font-size:
 body.liquid-glass .segmented button.selected{background:rgba(255,255,255,.18);color:var(--text);box-shadow:0 2px 10px rgba(0,0,0,.16)}
 
 .settings-group{display:grid;gap:10px;padding:4px 0 8px}.settings-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px;border-radius:16px;background:var(--panel2)}.settings-row strong{display:block;font-size:14px}.settings-row small{display:block;color:var(--muted);font-size:11px;margin-top:3px}.settings-toggle{min-width:58px;padding:8px 12px;border-radius:12px;background:var(--bg);font-size:13px;font-weight:700}.settings-toggle.selected{background:var(--accent);color:var(--bg)}
+
+/* The viewer is portrait-locked visually: rotating the device never changes
+   the card into a landscape-shaped frame. The surrounding app may remain landscape. */
+@media (orientation:landscape){
+  #cardStage{width:100vw;height:100vh}
+  .cardSlide{width:100vw;height:100vh}
+  .cardSlide>.card3d{width:min(70vh,760px);height:min(93.333vh,900px);aspect-ratio:3/4}
+}
 
 /* Device rotation must not rotate the card viewer. Cards remain upright and the
    same centered card is restored after the viewport dimensions change. */
