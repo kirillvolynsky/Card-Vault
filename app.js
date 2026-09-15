@@ -169,55 +169,67 @@ function flip(){
  applyZoom();
 }
 
-// Horizontal, finger-following card navigation. The neighboring card is
-// already positioned just outside the viewport, so it naturally peeks in
-// as the current card is dragged rather than appearing after the index swap.
+// Horizontal, finger-following card navigation.
+// Both cards live in the same fixed viewport and move together. The incoming
+// card starts completely outside the viewport; while dragging, it follows the
+// current card at exactly the same x-offset. This makes the interaction behave
+// like a real horizontal scroll instead of an index-change animation.
 let swipeCards=null;
+function cardXTransform(x, scale=1, flipped=false){
+ const rot=flipped?' rotateY(180deg)':'';
+ return `translate3d(calc(-50% + ${x}px), -50%, 0)${rot} scale(${scale})`;
+}
 function prepareSwipeCards(dir){
  const n=current+dir;
  if(n<0||n>=cards.length)return null;
  const stage=$('cardStage');
  const currentCard=$('card');
  const incoming=makeViewerCard(cards[n]);
- const width=stage.clientWidth||window.innerWidth;
- const side=dir>0?width:-width; // next enters from right, previous from left
- incoming.style.transform=cardTransform(side,.98,false);
+ const stageWidth=stage.clientWidth||window.innerWidth;
+ const cardWidth=currentCard.getBoundingClientRect().width||Math.min(window.innerWidth*.92,760);
+ // Center-to-center distance needed to move a card completely beyond the
+ // viewport. At half a viewport of drag, the incoming card is ~50% visible.
+ const offset=(stageWidth+cardWidth)/2;
+ incoming.style.transition='none';
+ currentCard.style.transition='none';
+ incoming.style.transform=cardXTransform(dir>0?offset:-offset,.995,false);
  incoming.style.opacity='1';
- currentCard.style.transform=cardTransform(0,1,currentCard.classList.contains('flipped'));
+ currentCard.style.transform=cardXTransform(0,1,currentCard.classList.contains('flipped'));
  currentCard.style.opacity='1';
  stage.appendChild(incoming);
- swipeCards={dir,n,currentCard,incoming,width,startX:0};
+ swipeCards={dir,n,currentCard,incoming,stageWidth,cardWidth,offset};
  return swipeCards;
 }
 function updateSwipe(dx){
  if(!swipeCards)return;
- const {dir,currentCard,incoming,width}=swipeCards;
- const clamped=Math.max(-width,width*-1,Math.min(width,dx));
+ const {dir,currentCard,incoming,offset}=swipeCards;
+ const clamped=Math.max(-offset,Math.min(offset,dx));
  const flipped=currentCard.classList.contains('flipped');
- const currentScale=1-Math.min(.035,Math.abs(clamped)/width*.035);
- const incomingScale=.98+Math.min(.02,Math.abs(clamped)/width*.02);
- currentCard.style.transform=cardTransform(clamped,currentScale,flipped);
- incoming.style.transform=cardTransform(clamped + (dir>0?width:-width),incomingScale,false);
- currentCard.style.opacity=String(1-Math.min(.08,Math.abs(clamped)/width*.08));
+ // Keep the card essentially flat/constant-size while following the finger.
+ currentCard.style.transform=cardXTransform(clamped,1,flipped);
+ incoming.style.transform=cardXTransform((dir>0?offset:-offset)+clamped,1,false);
+ currentCard.style.opacity='1';
 }
 function finishSwipe(commit){
  if(!swipeCards)return;
- const {dir,n,currentCard,incoming,width}=swipeCards;
+ const {dir,n,currentCard,incoming,offset}=swipeCards;
  const m=currentCard.style.transform.match(/calc\(-50% \+ (-?[0-9.]+)px/);
  const fromX=m?parseFloat(m[1]):0;
- const start=window.performance.now();
- const distance=Math.abs(fromX);
- const duration=commit?Math.max(240,Math.min(390,300+distance*.18)):300;
- const target=commit?(dir>0?-width:width):0;
- const incomingTarget=commit?0:(dir>0?width:-width);
- const ease='cubic-bezier(.22,.72,.2,1)';
- currentCard.style.transition=`transform ${duration}ms ${ease}, opacity ${duration}ms ease`;
+ const distance=Math.abs((commit?(dir>0?-offset:offset):0)-fromX);
+ const duration=Math.max(260,Math.min(460,220+distance*.38));
+ const ease='cubic-bezier(.22,.75,.2,1)';
+ currentCard.style.transition=`transform ${duration}ms ${ease}`;
  incoming.style.transition=`transform ${duration}ms ${ease}`;
- currentCard.style.transform=cardTransform(target,commit?.985:1,currentCard.classList.contains('flipped'));
- incoming.style.transform=cardTransform(incomingTarget,commit?1:.98,false);
+ currentCard.style.transform=cardXTransform(commit?(dir>0?-offset:offset):0,1,currentCard.classList.contains('flipped'));
+ incoming.style.transform=cardXTransform(commit?0:(dir>0?offset:-offset),1,false);
  if(!commit){
-   currentCard.style.opacity='1';
-   setTimeout(()=>{ if(swipeCards){ $('cardStage').removeChild(incoming); swipeCards=null; } },duration+30);
+   setTimeout(()=>{
+     if(!swipeCards)return;
+     incoming.remove();
+     currentCard.style.transition='';
+     incoming.style.transition='';
+     swipeCards=null;
+   },duration+20);
    return;
  }
  setTimeout(()=>{
@@ -226,7 +238,7 @@ function finishSwipe(commit){
    $('cardStage').replaceChildren(makeViewerCard(cards[current],'card'));
    applyZoom();
    swipeCards=null;
- },duration+30);
+ },duration+20);
 }
 function next(dir){
  if($('cardStage').dataset.animating==='1')return;
@@ -234,19 +246,18 @@ function next(dir){
  $('cardStage').dataset.animating='1';
  const sw=prepareSwipeCards(dir);
  if(!sw){$('cardStage').dataset.animating='0';return;}
- // Programmatic navigation behaves like a decisive flick.
  requestAnimationFrame(()=>{
-   sw.currentCard.style.transition=`transform 320ms cubic-bezier(.22,.72,.2,1), opacity 320ms ease`;
-   sw.incoming.style.transition=`transform 320ms cubic-bezier(.22,.72,.2,1)`;
-   const target=sw.dir>0?-sw.width:sw.width;
-   sw.currentCard.style.transform=cardTransform(target,.985,sw.currentCard.classList.contains('flipped'));
-   sw.currentCard.style.opacity='.94';
-   sw.incoming.style.transform=cardTransform(0,1,false);
+   const duration=360;
+   const ease='cubic-bezier(.22,.75,.2,1)';
+   sw.currentCard.style.transition=`transform ${duration}ms ${ease}`;
+   sw.incoming.style.transition=`transform ${duration}ms ${ease}`;
+   sw.currentCard.style.transform=cardXTransform(sw.dir>0?-sw.offset:sw.offset,1,sw.currentCard.classList.contains('flipped'));
+   sw.incoming.style.transform=cardXTransform(0,1,false);
    setTimeout(()=>{
      current=sw.n;zoom=1;
      $('cardStage').replaceChildren(makeViewerCard(cards[current],'card'));
      applyZoom();swipeCards=null;$('cardStage').dataset.animating='0';
-   },350);
+   },duration+20);
  });
 }
 
@@ -301,9 +312,9 @@ function finishPointer(e){
  if(stage.dataset.animating==='1')return;
  const dx=e.clientX-gestureStartX,dy=e.clientY-gestureStartY;
  if(swipeCards){
-   const width=swipeCards.width;
+   const width=swipeCards.stageWidth;
    const velocity=Math.abs(swipeVelocityX);
-   const commit=Math.abs(dx)>width*.22 || velocity>.65;
+   const commit=Math.abs(dx)>width*.25 || velocity>.55;
    stage.dataset.animating='1';
    finishSwipe(commit);
    setTimeout(()=>stage.dataset.animating='0',commit?420:340);
