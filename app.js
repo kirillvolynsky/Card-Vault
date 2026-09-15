@@ -169,11 +169,10 @@ function flip(){
  applyZoom();
 }
 
-// Horizontal, finger-following card navigation.
-// Both cards live in the same fixed viewport and move together. The incoming
-// card starts completely outside the viewport; while dragging, it follows the
-// current card at exactly the same x-offset. This makes the interaction behave
-// like a real horizontal scroll instead of an index-change animation.
+// Horizontal card navigation: the current card stays centered while the
+// incoming card is revealed from completely outside the viewport. During a
+// drag the incoming card follows the finger; on release it smoothly completes
+// the remaining 50% and covers the old card.
 let swipeCards=null;
 function cardXTransform(x, scale=1, flipped=false){
  const rot=flipped?' rotateY(180deg)':'';
@@ -187,47 +186,55 @@ function prepareSwipeCards(dir){
  const incoming=makeViewerCard(cards[n]);
  const stageWidth=stage.clientWidth||window.innerWidth;
  const cardWidth=currentCard.getBoundingClientRect().width||Math.min(window.innerWidth*.92,760);
- // Center-to-center distance needed to move a card completely beyond the
- // viewport. At half a viewport of drag, the incoming card is ~50% visible.
- const offset=(stageWidth+cardWidth)/2;
+ // The incoming card starts with its nearest edge exactly at the viewport edge.
+ // At the end of the finger drag it is 50% visible; release then brings it
+ // through the remaining 50% into the centered position.
+ const outsideOffset=(stageWidth+cardWidth)/2;
+ const revealOffset=stageWidth/2;
+ const dragDistance=Math.max(1,cardWidth/2);
+ const initialX=dir>0?outsideOffset:-outsideOffset;
+ const revealX=dir>0?revealOffset:-revealOffset;
  incoming.style.transition='none';
- currentCard.style.transition='none';
- incoming.style.transform=cardXTransform(dir>0?offset:-offset,.995,false);
+ incoming.style.transform=cardXTransform(initialX,1,false);
  incoming.style.opacity='1';
+ incoming.style.zIndex='2';
+ currentCard.style.transition='none';
  currentCard.style.transform=cardXTransform(0,1,currentCard.classList.contains('flipped'));
  currentCard.style.opacity='1';
+ currentCard.style.zIndex='1';
  stage.appendChild(incoming);
- swipeCards={dir,n,currentCard,incoming,stageWidth,cardWidth,offset};
+ swipeCards={dir,n,currentCard,incoming,stageWidth,cardWidth,outsideOffset,revealOffset,dragDistance,initialX,revealX};
  return swipeCards;
 }
 function updateSwipe(dx){
  if(!swipeCards)return;
- const {dir,currentCard,incoming,offset}=swipeCards;
- const clamped=Math.max(-offset,Math.min(offset,dx));
- const flipped=currentCard.classList.contains('flipped');
- // Keep the card essentially flat/constant-size while following the finger.
- currentCard.style.transform=cardXTransform(clamped,1,flipped);
- incoming.style.transform=cardXTransform((dir>0?offset:-offset)+clamped,1,false);
- currentCard.style.opacity='1';
+ const {dir,incoming,initialX,revealX,dragDistance}=swipeCards;
+ // Current card deliberately does not move. The incoming card follows the
+ // gesture from 0% visible to 50% visible, then waits for release.
+ const distance=Math.min(dragDistance,Math.max(0,Math.abs(dx)));
+ const progress=distance/dragDistance;
+ const x=initialX+(revealX-initialX)*progress;
+ incoming.style.transform=cardXTransform(x,1,false);
 }
 function finishSwipe(commit){
  if(!swipeCards)return;
- const {dir,n,currentCard,incoming,offset}=swipeCards;
- const m=currentCard.style.transform.match(/calc\(-50% \+ (-?[0-9.]+)px/);
- const fromX=m?parseFloat(m[1]):0;
- const distance=Math.abs((commit?(dir>0?-offset:offset):0)-fromX);
- const duration=Math.max(260,Math.min(460,220+distance*.38));
+ const {dir,n,currentCard,incoming,initialX,revealX,dragDistance}=swipeCards;
+ const m=incoming.style.transform.match(/calc\(-50% \+ (-?[0-9.]+)px/);
+ const fromX=m?parseFloat(m[1]):initialX;
+ const targetX=commit?0:initialX;
+ const distance=Math.abs(targetX-fromX);
+ const duration=Math.max(220,Math.min(420,180+distance*.45));
  const ease='cubic-bezier(.22,.75,.2,1)';
- currentCard.style.transition=`transform ${duration}ms ${ease}`;
  incoming.style.transition=`transform ${duration}ms ${ease}`;
- currentCard.style.transform=cardXTransform(commit?(dir>0?-offset:offset):0,1,currentCard.classList.contains('flipped'));
- incoming.style.transform=cardXTransform(commit?0:(dir>0?offset:-offset),1,false);
+ incoming.style.transform=cardXTransform(targetX,1,false);
  if(!commit){
+   // Current card was never moved, so snapping back only needs to return the
+   // incoming card to its original off-screen position.
    setTimeout(()=>{
      if(!swipeCards)return;
      incoming.remove();
      currentCard.style.transition='';
-     incoming.style.transition='';
+     currentCard.style.transform=cardXTransform(0,1,currentCard.classList.contains('flipped'));
      swipeCards=null;
    },duration+20);
    return;
@@ -249,9 +256,7 @@ function next(dir){
  requestAnimationFrame(()=>{
    const duration=360;
    const ease='cubic-bezier(.22,.75,.2,1)';
-   sw.currentCard.style.transition=`transform ${duration}ms ${ease}`;
    sw.incoming.style.transition=`transform ${duration}ms ${ease}`;
-   sw.currentCard.style.transform=cardXTransform(sw.dir>0?-sw.offset:sw.offset,1,sw.currentCard.classList.contains('flipped'));
    sw.incoming.style.transform=cardXTransform(0,1,false);
    setTimeout(()=>{
      current=sw.n;zoom=1;
@@ -312,9 +317,8 @@ function finishPointer(e){
  if(stage.dataset.animating==='1')return;
  const dx=e.clientX-gestureStartX,dy=e.clientY-gestureStartY;
  if(swipeCards){
-   const width=swipeCards.stageWidth;
    const velocity=Math.abs(swipeVelocityX);
-   const commit=Math.abs(dx)>width*.25 || velocity>.55;
+   const commit=Math.abs(dx)>=swipeCards.dragDistance || velocity>.55;
    stage.dataset.animating='1';
    finishSwipe(commit);
    setTimeout(()=>stage.dataset.animating='0',commit?420:340);
