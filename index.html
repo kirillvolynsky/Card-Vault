@@ -17,8 +17,20 @@
     <h1>Card Vault</h1>
     <button id="folderFilterBtn" class="filter-btn" aria-label="Choose folder">All Cards ▾</button>
   </div>
-  <div class="header-actions"><button id="musicBtn" class="icon-btn" aria-label="Turn music on" aria-pressed="false">♫</button><button id="themeBtn" class="icon-btn" aria-label="Switch theme">☀︎</button><button id="addBtn" class="primary">＋ Add Card</button></div>
+  <div class="header-actions"><button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-expanded="false">⚙︎</button><button id="addBtn" class="primary">＋ Add Card</button></div>
 </header>
+
+<!-- Settings -->
+<div id="settingsMenu" class="modal hidden" aria-hidden="true">
+  <div class="sheet compact settings-sheet">
+    <div class="sheet-head"><button id="closeSettings">Done</button><h2>Settings</h2><span></span></div>
+    <div class="settings-group">
+      <div class="settings-row"><div><strong>Appearance</strong><small>Light or dark interface</small></div><div class="segmented" id="appearanceOptions"><button data-appearance="dark">Dark</button><button data-appearance="light">Light</button></div></div>
+      <div class="settings-row"><div><strong>Music</strong><small>Pastel Future theme music</small></div><button id="musicToggle" class="settings-toggle" type="button" aria-pressed="false">Off</button></div>
+      <div class="settings-row"><div><strong>Theme</strong><small>Choose the button and panel style</small></div><div class="segmented" id="themeOptions"><button data-theme="flat">Flat</button><button data-theme="glass">Liquid Glass</button></div></div>
+    </div>
+  </div>
+</div>
 
 <main>
   <section id="empty" class="empty">

@@ -298,7 +298,93 @@ window.addEventListener("orientationchange",()=>setTimeout(updateOrientationLock
 
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
 
-const savedTheme=localStorage.getItem("card-vault-theme");if(savedTheme==="light")document.body.classList.add("light");$("themeBtn").onclick=()=>{document.body.classList.toggle("light");localStorage.setItem("card-vault-theme",document.body.classList.contains("light")?"light":"dark")};
+// Orientation: the viewer itself never rotates when the device orientation changes.
+// We only re-center the currently selected card after the viewport is resized.
+function updateOrientationLock(){
+  const stage=$("cardStage");
+  if(!$('viewer') || !$('cardStage') || $("viewer").classList.contains("hidden"))return;
+  requestAnimationFrame(()=>{
+    const list=visibleCards();
+    const local=list.findIndex(c=>cards.indexOf(c)===current);
+    if(local>=0)stage.scrollTo({left:local*stage.clientWidth,behavior:"auto"});
+  });
+}
+window.addEventListener("resize",updateOrientationLock);
+window.addEventListener("orientationchange",()=>setTimeout(updateOrientationLock,120));
+
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+
+// Persistent appearance + theme preferences.
+const savedAppearance=localStorage.getItem("card-vault-theme")||"dark";
+const savedVisualTheme=localStorage.getItem("card-vault-visual-theme")||"glass";
+if(savedAppearance==="light")document.body.classList.add("light");
+if(savedVisualTheme==="glass")document.body.classList.add("liquid-glass");
+
+function applyAppearance(mode){
+  document.body.classList.toggle("light",mode==="light");
+  localStorage.setItem("card-vault-theme",mode);
+  syncSettingsUI();
+}
+function applyVisualTheme(theme){
+  document.body.classList.toggle("liquid-glass",theme==="glass");
+  localStorage.setItem("card-vault-visual-theme",theme);
+  syncSettingsUI();
+}
+
+// Persistent music preference. Playback is tied to app visibility; it pauses when
+// the PWA/browser is hidden and resumes immediately when it becomes visible again.
+const themeMusic=$("themeMusic");
+let musicOn=localStorage.getItem("card-vault-music")==="on";
+themeMusic.volume=.42;
+function updateMusicPlayback(){
+  if(musicOn && document.visibilityState==="visible"){
+    themeMusic.play().catch(()=>{});
+  }else{
+    themeMusic.pause();
+  }
+}
+function setMusic(on){
+  musicOn=!!on;
+  localStorage.setItem("card-vault-music",musicOn?"on":"off");
+  updateMusicPlayback();
+  syncSettingsUI();
+}
+
+document.addEventListener("visibilitychange",updateMusicPlayback);
+window.addEventListener("pagehide",()=>themeMusic.pause());
+window.addEventListener("pageshow",()=>{if(musicOn)updateMusicPlayback()});
+themeMusic.addEventListener("ended",()=>{if(musicOn&&document.visibilityState==="visible")themeMusic.play().catch(()=>{})});
+
+// Settings menu consolidates appearance, music, and visual theme controls.
+function syncSettingsUI(){
+  const mode=document.body.classList.contains("light")?"light":"dark";
+  const visual=document.body.classList.contains("liquid-glass")?"glass":"flat";
+  document.querySelectorAll("#appearanceOptions button").forEach(b=>b.classList.toggle("selected",b.dataset.appearance===mode));
+  document.querySelectorAll("#themeOptions button").forEach(b=>b.classList.toggle("selected",b.dataset.theme===visual));
+  const toggle=$("musicToggle");
+  toggle.textContent=musicOn?"On":"Off";
+  toggle.setAttribute("aria-pressed",String(musicOn));
+  toggle.classList.toggle("selected",musicOn);
+}
+function showSettings(){
+  syncSettingsUI();
+  $("settingsMenu").classList.remove("hidden");
+  $("settingsMenu").setAttribute("aria-hidden","false");
+  $("settingsBtn").setAttribute("aria-expanded","true");
+}
+function closeSettings(){
+  $("settingsMenu").classList.add("hidden");
+  $("settingsMenu").setAttribute("aria-hidden","true");
+  $("settingsBtn").setAttribute("aria-expanded","false");
+}
+$("settingsBtn").onclick=()=>$("settingsMenu").classList.contains("hidden")?showSettings():closeSettings();
+$("closeSettings").onclick=closeSettings;
+$("appearanceOptions").querySelectorAll("button").forEach(b=>b.onclick=()=>applyAppearance(b.dataset.appearance));
+$("themeOptions").querySelectorAll("button").forEach(b=>b.onclick=()=>applyVisualTheme(b.dataset.theme));
+$("musicToggle").onclick=()=>setMusic(!musicOn);
+$("settingsMenu").addEventListener("click",e=>{if(e.target===$("settingsMenu"))closeSettings()});
+syncSettingsUI();
+
 openDB().then(refresh).catch(err=>alert("Could not open local storage: "+err));
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 
@@ -340,21 +426,4 @@ $("cancelChangeFolder").onclick=closeChangeFolderMenu;
 $("clearCardFolder").onclick=async()=>{
   const id=Number($("changeFolderMenu").dataset.id); const c=cards.find(x=>x.id===id); if(!c)return;
   c.folderId=null; await putCard(c); closeChangeFolderMenu(); await refresh();
-};
-
-// Optional background theme music. It intentionally starts OFF on every app load.
-const themeMusic=$("themeMusic"),musicBtn=$("musicBtn");
-let musicOn=false;
-themeMusic.volume=.42;
-function updateMusicButton(){
-  musicBtn.textContent=musicOn?"♫":"♩";
-  musicBtn.setAttribute("aria-pressed",String(musicOn));
-  musicBtn.setAttribute("aria-label",musicOn?"Turn music off":"Turn music on");
-  musicBtn.title=musicOn?"Turn music off":"Turn music on";
-}
-updateMusicButton();
-musicBtn.onclick=async()=>{
-  if(musicOn){themeMusic.pause();musicOn=false;updateMusicButton();return;}
-  try{await themeMusic.play();musicOn=true;}catch(e){musicOn=false;}
-  updateMusicButton();
 };
