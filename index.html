@@ -17,7 +17,7 @@
     <h1>Card Vault</h1>
     <button id="folderFilterBtn" class="filter-btn" aria-label="Choose folder">All Cards ▾</button>
   </div>
-  <button id="addBtn" class="primary">＋ Add Card</button>
+  <div class="header-actions"><button id="themeBtn" class="icon-btn" aria-label="Switch theme">☀︎</button><button id="addBtn" class="primary">＋ Add Card</button></div>
 </header>
 
 <main>
@@ -84,14 +84,12 @@
 <!-- Viewer -->
 <div id="viewer" class="viewer hidden">
   <button id="closeViewer" class="close" aria-label="Close">×</button>
-  <div id="counter"></div>
   <div id="cardStage">
     <div id="card" class="card3d">
       <div class="face frontFace"><img id="viewFront" alt=""></div>
       <div class="face backFace"><img id="viewBack" alt=""></div>
     </div>
   </div>
-  <div class="viewer-help">Swipe to change · Tap to flip · Pinch to zoom</div>
 </div>
 
 <script src="app.js"></script>

@@ -25,7 +25,8 @@ function renderGrid(){
  list.forEach((c,i)=>{
   const b=document.createElement("button");b.className="thumb";b.dataset.id=c.id;
   b.innerHTML=`<img src="${c.front}" alt="Card ${i+1}">${c.back?'<span class="badge">2-sided</span>':''}<span class="drag-hint">Hold & drag</span>`;
-  b.addEventListener("click",()=>{if(!dragging)openViewer(cards.indexOf(c))});
+  b.addEventListener("click",e=>{if(e.target.closest(".more-btn"))return;if(!dragging&&!moved)openViewer(cards.indexOf(c))});
+  b.querySelector(".more-btn").addEventListener("click",e=>{e.stopPropagation();showActions(c.id)});
   b.addEventListener("contextmenu",e=>{e.preventDefault();showActions(c.id)});
   b.addEventListener("pointerdown",e=>startPress(e,b,c.id));
   b.addEventListener("pointermove",e=>movePress(e,b,c.id));
@@ -137,9 +138,9 @@ function renderViewer(){
  $("counter").textContent=`${current+1} / ${cards.length}`;
  applyZoom();
 }
-function flip(){if(cards[current]?.back&&zoom===1)$("card").classList.toggle("flipped")}
-function next(dir){if(dir>0&&current<cards.length-1){current++;zoom=1;renderViewer()}else if(dir<0&&current>0){current--;zoom=1;renderViewer()}}
-$("cardStage").addEventListener("click",e=>{if(!moved&&!dragging)flip();moved=false});
+function flip(){if(cards[current]?.back&&zoom===1){$("card").classList.toggle("flipped");applyZoom()}}
+function next(dir){const n=current+dir;if(n<0||n>=cards.length)return;const stage=$("cardStage");stage.classList.add(dir>0?"slide-left":"slide-right");setTimeout(()=>{current=n;zoom=1;renderViewer();stage.classList.remove("slide-left","slide-right")},180)}
+
 let sx=0,sy=0,pinchStart=0,zoomStart=1;
 $("cardStage").addEventListener("pointerdown",e=>{
  if(e.pointerType==="touch"){sx=e.clientX;sy=e.clientY}
@@ -165,5 +166,6 @@ function updateOrientationLock(){const landscape=window.matchMedia("(orientation
 window.addEventListener("resize",()=>{if(!$("viewer").classList.contains("hidden"))updateOrientationLock()});
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
 
+const savedTheme=localStorage.getItem("card-vault-theme");if(savedTheme==="light")document.body.classList.add("light");$("themeBtn").onclick=()=>{document.body.classList.toggle("light");localStorage.setItem("card-vault-theme",document.body.classList.contains("light")?"light":"dark")};
 openDB().then(refresh).catch(err=>alert("Could not open local storage: "+err));
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
