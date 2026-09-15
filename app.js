@@ -140,114 +140,177 @@ function openViewer(i){
  renderViewer();
  updateOrientationLock();
 }
+function cardTransform(x=0, scale=1, flipped=false){
+ const rot=flipped?' rotateY(180deg)':'';
+ return `translate(calc(-50% + ${x}px), -50%)${rot} scale(${scale})`;
+}
+function makeViewerCard(c, id=null){
+ const el=document.createElement("div");
+ el.className="card3d swipe-card";
+ if(id)el.id=id;
+ el.innerHTML='<div class="face frontFace"><img alt=""></div><div class="face backFace"><img alt=""></div>';
+ el.querySelector(".frontFace img").src=c.front;
+ el.querySelector(".backFace img").src=c.back||c.front;
+ el.classList.toggle("no-back",!c.back);
+ return el;
+}
 function renderViewer(){
  const c=cards[current];
- $("viewFront").src=c.front;
- $("viewBack").src=c.back||c.front;
- $("card").classList.remove("flipped");
- $("card").classList.toggle("no-back",!c.back);
+ const stage=$('cardStage');
+ stage.replaceChildren(makeViewerCard(c,'card'));
+ const card=$('card');
+ card.classList.remove('flipped');
  applyZoom();
 }
 function flip(){
  const c=cards[current];
  if(!c?.back)return;
- $("card").classList.toggle("flipped");
+ $('card').classList.toggle('flipped');
  applyZoom();
 }
-function next(dir){
+
+// Horizontal, finger-following card navigation. The neighboring card is
+// already positioned just outside the viewport, so it naturally peeks in
+// as the current card is dragged rather than appearing after the index swap.
+let swipeCards=null;
+function prepareSwipeCards(dir){
  const n=current+dir;
- if(n<0||n>=cards.length)return;
-
- const stage=$("cardStage");
- const oldCard=$("card");
- if(stage.dataset.animating==="1")return;
- stage.dataset.animating="1";
-
- // dir > 0 means the user swiped left: the current card exits left
- // and the next card enters from the right. dir < 0 is the opposite.
- const incoming=oldCard.cloneNode(true);
- incoming.id="cardIncoming";
- incoming.className="card3d";
- incoming.style.transform="";
- incoming.style.opacity="";
- incoming.classList.remove("flipped","no-back","out-left","out-right");
- const nextCard=cards[n];
- incoming.querySelector(".frontFace img").src=nextCard.front;
- incoming.querySelector(".backFace img").src=nextCard.back||nextCard.front;
- incoming.classList.toggle("no-back",!nextCard.back);
+ if(n<0||n>=cards.length)return null;
+ const stage=$('cardStage');
+ const currentCard=$('card');
+ const incoming=makeViewerCard(cards[n]);
+ const width=stage.clientWidth||window.innerWidth;
+ const side=dir>0?width:-width; // next enters from right, previous from left
+ incoming.style.transform=cardTransform(side,.98,false);
+ incoming.style.opacity='1';
+ currentCard.style.transform=cardTransform(0,1,currentCard.classList.contains('flipped'));
+ currentCard.style.opacity='1';
  stage.appendChild(incoming);
-
- const distance=`calc(50% + ${dir>0?"110vw":"-110vw"})`;
- const exitDistance=`calc(-50% + ${dir>0?"-110vw":"110vw"})`;
-
- // Use the Web Animations API so both cards interpolate continuously
- // from their actual starting positions instead of relying on a single
- // CSS class swap/frame.
- const easing="cubic-bezier(.22,.75,.18,1)";
- const duration=420;
- const oldAnimation=oldCard.animate(
-   [
-     {transform:"translate(-50%,-50%) scale(1)",opacity:1},
-     {transform:`translate(${exitDistance},-50%) scale(.985)`,opacity:.96}
-   ],
-   {duration,easing,fill:"forwards"}
- );
- const incomingAnimation=incoming.animate(
-   [
-     {transform:`translate(${distance},-50%) scale(.985)`,opacity:.96},
-     {transform:"translate(-50%,-50%) scale(1)",opacity:1}
-   ],
-   {duration,easing,fill:"forwards"}
- );
-
- Promise.all([oldAnimation.finished,incomingAnimation.finished]).then(()=>{
-   current=n;
-   zoom=1;
-   stage.replaceChildren();
-
-   const fresh=document.createElement("div");
-   fresh.id="card";
-   fresh.className="card3d";
-   fresh.innerHTML='<div class="face frontFace"><img id="viewFront" alt=""></div><div class="face backFace"><img id="viewBack" alt=""></div>';
-   stage.appendChild(fresh);
-
-   renderViewer();
-   stage.dataset.animating="0";
- }).catch(()=>{
-   stage.dataset.animating="0";
+ swipeCards={dir,n,currentCard,incoming,width,startX:0};
+ return swipeCards;
+}
+function updateSwipe(dx){
+ if(!swipeCards)return;
+ const {dir,currentCard,incoming,width}=swipeCards;
+ const clamped=Math.max(-width,width*-1,Math.min(width,dx));
+ const flipped=currentCard.classList.contains('flipped');
+ const currentScale=1-Math.min(.035,Math.abs(clamped)/width*.035);
+ const incomingScale=.98+Math.min(.02,Math.abs(clamped)/width*.02);
+ currentCard.style.transform=cardTransform(clamped,currentScale,flipped);
+ incoming.style.transform=cardTransform(clamped + (dir>0?width:-width),incomingScale,false);
+ currentCard.style.opacity=String(1-Math.min(.08,Math.abs(clamped)/width*.08));
+}
+function finishSwipe(commit){
+ if(!swipeCards)return;
+ const {dir,n,currentCard,incoming,width}=swipeCards;
+ const m=currentCard.style.transform.match(/calc\(-50% \+ (-?[0-9.]+)px/);
+ const fromX=m?parseFloat(m[1]):0;
+ const start=window.performance.now();
+ const distance=Math.abs(fromX);
+ const duration=commit?Math.max(240,Math.min(390,300+distance*.18)):300;
+ const target=commit?(dir>0?-width:width):0;
+ const incomingTarget=commit?0:(dir>0?width:-width);
+ const ease='cubic-bezier(.22,.72,.2,1)';
+ currentCard.style.transition=`transform ${duration}ms ${ease}, opacity ${duration}ms ease`;
+ incoming.style.transition=`transform ${duration}ms ${ease}`;
+ currentCard.style.transform=cardTransform(target,commit?.985:1,currentCard.classList.contains('flipped'));
+ incoming.style.transform=cardTransform(incomingTarget,commit?1:.98,false);
+ if(!commit){
+   currentCard.style.opacity='1';
+   setTimeout(()=>{ if(swipeCards){ $('cardStage').removeChild(incoming); swipeCards=null; } },duration+30);
+   return;
+ }
+ setTimeout(()=>{
+   if(!swipeCards)return;
+   current=n;zoom=1;
+   $('cardStage').replaceChildren(makeViewerCard(cards[current],'card'));
+   applyZoom();
+   swipeCards=null;
+ },duration+30);
+}
+function next(dir){
+ if($('cardStage').dataset.animating==='1')return;
+ if(!cards[current+dir])return;
+ $('cardStage').dataset.animating='1';
+ const sw=prepareSwipeCards(dir);
+ if(!sw){$('cardStage').dataset.animating='0';return;}
+ // Programmatic navigation behaves like a decisive flick.
+ requestAnimationFrame(()=>{
+   sw.currentCard.style.transition=`transform 320ms cubic-bezier(.22,.72,.2,1), opacity 320ms ease`;
+   sw.incoming.style.transition=`transform 320ms cubic-bezier(.22,.72,.2,1)`;
+   const target=sw.dir>0?-sw.width:sw.width;
+   sw.currentCard.style.transform=cardTransform(target,.985,sw.currentCard.classList.contains('flipped'));
+   sw.currentCard.style.opacity='.94';
+   sw.incoming.style.transform=cardTransform(0,1,false);
+   setTimeout(()=>{
+     current=sw.n;zoom=1;
+     $('cardStage').replaceChildren(makeViewerCard(cards[current],'card'));
+     applyZoom();swipeCards=null;$('cardStage').dataset.animating='0';
+   },350);
  });
 }
 
 // Viewer gestures: one-finger swipe/tap + two-finger pinch, using Pointer Events
 const pointers=new Map();
-let gestureStartX=0,gestureStartY=0,gestureMoved=false,pinchStart=0,zoomStart=1;
-const stage=$("cardStage");
-stage.addEventListener("pointerdown",e=>{
- if(e.pointerType==="mouse"&&e.button!==0)return;
+let gestureStartX=0,gestureStartY=0,gestureMoved=false,pinchStart=0,zoomStart=1,swipeVelocityX=0,lastGestureX=0,lastGestureTime=0;
+const stage=$('cardStage');
+stage.addEventListener('pointerdown',e=>{
+ if(e.pointerType==='mouse'&&e.button!==0)return;
+ if(stage.dataset.animating==='1')return;
  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
- if(pointers.size===1){gestureStartX=e.clientX;gestureStartY=e.clientY;gestureMoved=false;}
- if(pointers.size===2){pinchStart=pointerDistance();zoomStart=zoom;$("viewer").classList.add("zooming");}
+ if(pointers.size===1){
+   try{stage.setPointerCapture(e.pointerId)}catch(_){}
+   gestureStartX=e.clientX;gestureStartY=e.clientY;lastGestureX=e.clientX;lastGestureTime=performance.now();
+   gestureMoved=false;swipeVelocityX=0;
+ }
+ if(pointers.size===2){
+   pinchStart=pointerDistance();zoomStart=zoom;swipeCards=null;
+   stage.classList.add('pinching');
+ }
 });
-stage.addEventListener("pointermove",e=>{
- if(!pointers.has(e.pointerId))return;
+stage.addEventListener('pointermove',e=>{
+ if(!pointers.has(e.pointerId)||stage.dataset.animating==='1')return;
  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
  if(pointers.size===2){
    if(pinchStart){zoom=Math.min(4,Math.max(1,zoomStart*(pointerDistance()/pinchStart)));applyZoom();}
    gestureMoved=true;e.preventDefault();return;
  }
- if(pointers.size===1&&Math.hypot(e.clientX-gestureStartX,e.clientY-gestureStartY)>10){gestureMoved=true;e.preventDefault();}
+ if(pointers.size!==1)return;
+ const dx=e.clientX-gestureStartX,dy=e.clientY-gestureStartY;
+ if(Math.hypot(dx,dy)>10){
+   gestureMoved=true;
+   if(zoom===1&&Math.abs(dx)>Math.abs(dy)){
+     e.preventDefault();
+     if(!swipeCards){
+       const dir=dx<0?1:-1;
+       if(!prepareSwipeCards(dir))return;
+     }
+     swipeVelocityX=(e.clientX-lastGestureX)/Math.max(1,performance.now()-lastGestureTime);
+     updateSwipe(dx);
+   }
+   lastGestureX=e.clientX;lastGestureTime=performance.now();
+ }
 },{passive:false});
-stage.addEventListener("pointerup",finishPointer);
-stage.addEventListener("pointercancel",finishPointer);
+stage.addEventListener('pointerup',finishPointer);
+stage.addEventListener('pointercancel',finishPointer);
 function finishPointer(e){
  if(!pointers.has(e.pointerId))return;
  pointers.delete(e.pointerId);
- if(pointers.size===0){
-   $("viewer").classList.remove("zooming");
-   const dx=e.clientX-gestureStartX,dy=e.clientY-gestureStartY;
-   if(Math.abs(dx)>55&&Math.abs(dx)>Math.abs(dy)&&zoom===1) next(dx<0?1:-1);
-   else if(!gestureMoved&&Math.abs(dx)<15&&Math.abs(dy)<15) flip();
+ if(pointers.size>0)return;
+ stage.classList.remove('pinching');
+ if(stage.dataset.animating==='1')return;
+ const dx=e.clientX-gestureStartX,dy=e.clientY-gestureStartY;
+ if(swipeCards){
+   const width=swipeCards.width;
+   const velocity=Math.abs(swipeVelocityX);
+   const commit=Math.abs(dx)>width*.22 || velocity>.65;
+   stage.dataset.animating='1';
+   finishSwipe(commit);
+   setTimeout(()=>stage.dataset.animating='0',commit?420:340);
+ }else if(!gestureMoved&&Math.abs(dx)<15&&Math.abs(dy)<15){
+   flip();
  }
+ swipeVelocityX=0;
 }
 function pointerDistance(){
  const a=[...pointers.values()];
