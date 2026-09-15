@@ -301,3 +301,60 @@ function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":
 const savedTheme=localStorage.getItem("card-vault-theme");if(savedTheme==="light")document.body.classList.add("light");$("themeBtn").onclick=()=>{document.body.classList.toggle("light");localStorage.setItem("card-vault-theme",document.body.classList.contains("light")?"light":"dark")};
 openDB().then(refresh).catch(err=>alert("Could not open local storage: "+err));
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+
+// Modal quality-of-life: tapping the dimmed area closes menus, while the
+// existing Cancel/Done buttons remain available. Taps inside a sheet stay open.
+const modalClosers={
+  folderMenu:closeFolderMenu,
+  editor:closeEditor,
+  actions:()=>$("actions").classList.add("hidden"),
+  changeFolderMenu:()=>closeChangeFolderMenu()
+};
+Object.entries(modalClosers).forEach(([id,close])=>{
+  const modal=$(id);
+  modal.addEventListener("click",e=>{if(e.target===modal)close()});
+});
+
+function showChangeFolderMenu(cardId){
+  const c=cards.find(x=>x.id===cardId); if(!c)return;
+  $("changeFolderMenu").dataset.id=String(cardId);
+  renderChangeFolderList(c.folderId??null);
+  $("actions").classList.add("hidden");
+  $("changeFolderMenu").classList.remove("hidden");
+  $("changeFolderMenu").setAttribute("aria-hidden","false");
+}
+function closeChangeFolderMenu(){
+  $("changeFolderMenu").classList.add("hidden");
+  $("changeFolderMenu").setAttribute("aria-hidden","true");
+}
+function renderChangeFolderList(selected){
+  const rows=folders.map(f=>`<button class="folder-row ${selected===f.id?"selected":""}" data-folder-id="${f.id}">📁 ${escapeHtml(f.name)}<span class="count">${cards.filter(c=>c.folderId===f.id).length}</span></button>`).join("");
+  $("changeFolderList").innerHTML=rows||'<div class="folder-empty">No folders yet. Create one from Folders.</div>';
+  $("changeFolderList").querySelectorAll("[data-folder-id]").forEach(btn=>btn.onclick=async()=>{
+    const id=Number($("changeFolderMenu").dataset.id); const c=cards.find(x=>x.id===id); if(!c)return;
+    c.folderId=Number(btn.dataset.folderId); await putCard(c); closeChangeFolderMenu(); await refresh();
+  });
+}
+$("changeFolderBtn").onclick=()=>showChangeFolderMenu(Number($("actions").dataset.id));
+$("cancelChangeFolder").onclick=closeChangeFolderMenu;
+$("clearCardFolder").onclick=async()=>{
+  const id=Number($("changeFolderMenu").dataset.id); const c=cards.find(x=>x.id===id); if(!c)return;
+  c.folderId=null; await putCard(c); closeChangeFolderMenu(); await refresh();
+};
+
+// Optional background theme music. It intentionally starts OFF on every app load.
+const themeMusic=$("themeMusic"),musicBtn=$("musicBtn");
+let musicOn=false;
+themeMusic.volume=.42;
+function updateMusicButton(){
+  musicBtn.textContent=musicOn?"♫":"♩";
+  musicBtn.setAttribute("aria-pressed",String(musicOn));
+  musicBtn.setAttribute("aria-label",musicOn?"Turn music off":"Turn music on");
+  musicBtn.title=musicOn?"Turn music off":"Turn music on";
+}
+updateMusicButton();
+musicBtn.onclick=async()=>{
+  if(musicOn){themeMusic.pause();musicOn=false;updateMusicButton();return;}
+  try{await themeMusic.play();musicOn=true;}catch(e){musicOn=false;}
+  updateMusicButton();
+};

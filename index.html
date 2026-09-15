@@ -17,7 +17,7 @@
     <h1>Card Vault</h1>
     <button id="folderFilterBtn" class="filter-btn" aria-label="Choose folder">All Cards ▾</button>
   </div>
-  <div class="header-actions"><button id="themeBtn" class="icon-btn" aria-label="Switch theme">☀︎</button><button id="addBtn" class="primary">＋ Add Card</button></div>
+  <div class="header-actions"><button id="musicBtn" class="icon-btn" aria-label="Turn music on" aria-pressed="false">♫</button><button id="themeBtn" class="icon-btn" aria-label="Switch theme">☀︎</button><button id="addBtn" class="primary">＋ Add Card</button></div>
 </header>
 
 <main>
@@ -76,10 +76,21 @@
   <div class="sheet action-sheet">
     <div class="action-preview"><img id="actionPreview" alt=""></div>
     <button id="editBtn" class="action">Edit Card</button>
+    <button id="changeFolderBtn" class="action">Change Folder</button>
     <button id="deleteBtn" class="action destructive">Delete Card</button>
     <button id="cancelActions" class="action cancel-action">Cancel</button>
   </div>
 </div>
+
+<!-- Change folder -->
+<div id="changeFolderMenu" class="modal hidden" aria-hidden="true">
+  <div class="sheet compact">
+    <div class="sheet-head"><button id="cancelChangeFolder">Cancel</button><h2>Change Folder</h2><button id="clearCardFolder" class="primary small">No Folder</button></div>
+    <div id="changeFolderList" class="folder-list"></div>
+  </div>
+</div>
+
+<audio id="themeMusic" src="Pastel Future.mp3" loop preload="auto"></audio>
 
 <!-- Viewer -->
 <div id="viewer" class="viewer hidden">

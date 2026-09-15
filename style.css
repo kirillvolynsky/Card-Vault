@@ -46,3 +46,5 @@ header{min-height:78px;padding:14px 18px;display:flex;align-items:center;justify
 .viewer.landscape-lock #cardStage{transform:none;width:100%;height:100%}
 .viewer.landscape-lock .cardSlide>.card3d{width:min(88vh,760px);height:min(88vw,900px)}
 @media(prefers-reduced-motion:reduce){#cardStage{scroll-behavior:auto}.cardSlide>.card3d{transition:none}}
+.folder-empty{padding:18px;text-align:center;color:var(--muted);font-size:13px;background:var(--panel2);border-radius:14px}
+.modal{cursor:default}
