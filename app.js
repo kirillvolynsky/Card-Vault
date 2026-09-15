@@ -291,14 +291,11 @@ document.addEventListener("keydown",e=>{
 });
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
 
-// Keep the card's portrait orientation fixed to the original reading direction.
-// In landscape, the whole scroll surface rotates 90° so the physical up/down
-// gesture is still the viewer's left/right card navigation.
+// Keep the viewer itself unchanged when the device rotates. The browser simply
+// gives it the new viewport dimensions; the cards and their scroll direction stay the same.
 function updateOrientationLock(){
   const stage=$("cardStage");
   if(!stage || $("viewer").classList.contains("hidden"))return;
-  const landscape=window.matchMedia("(orientation: landscape)").matches;
-  $("viewer").classList.toggle("landscape-lock",landscape);
   requestAnimationFrame(()=>{
     const list=visibleCards();
     const local=list.findIndex(c=>cards.indexOf(c)===current);
