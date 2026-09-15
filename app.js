@@ -289,20 +289,16 @@ document.addEventListener("keydown",e=>{
  if(e.key==="Escape")$("viewer").classList.add("hidden");
  if(e.key===" "){e.preventDefault();flip();}
 });
-function updateOrientationLock(){
- const landscape=window.matchMedia("(orientation: landscape)").matches;
- $("viewer").classList.toggle("landscape-lock",landscape);
-}
-window.addEventListener("resize",()=>{if(!$("viewer").classList.contains("hidden"))updateOrientationLock();});
-window.addEventListener("orientationchange",()=>setTimeout(updateOrientationLock,50));
-
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
 
-// Orientation: the viewer itself never rotates when the device orientation changes.
-// We only re-center the currently selected card after the viewport is resized.
+// Keep the card's portrait orientation fixed to the original reading direction.
+// In landscape, the whole scroll surface rotates 90° so the physical up/down
+// gesture is still the viewer's left/right card navigation.
 function updateOrientationLock(){
   const stage=$("cardStage");
-  if(!$('viewer') || !$('cardStage') || $("viewer").classList.contains("hidden"))return;
+  if(!stage || $("viewer").classList.contains("hidden"))return;
+  const landscape=window.matchMedia("(orientation: landscape)").matches;
+  $("viewer").classList.toggle("landscape-lock",landscape);
   requestAnimationFrame(()=>{
     const list=visibleCards();
     const local=list.findIndex(c=>cards.indexOf(c)===current);
@@ -335,25 +331,43 @@ function applyVisualTheme(theme){
 // the PWA/browser is hidden and resumes immediately when it becomes visible again.
 const themeMusic=$("themeMusic");
 let musicOn=localStorage.getItem("card-vault-music")==="on";
+let musicNeedsGesture=false;
 themeMusic.volume=.42;
 function updateMusicPlayback(){
   if(musicOn && document.visibilityState==="visible"){
-    themeMusic.play().catch(()=>{});
+    const p=themeMusic.play();
+    if(p&&typeof p.catch==="function")p.catch(()=>{musicNeedsGesture=true});
   }else{
     themeMusic.pause();
+    musicNeedsGesture=false;
   }
+}
+function unlockMusic(){
+  if(!musicOn || document.visibilityState!=="visible")return;
+  const p=themeMusic.play();
+  if(p&&typeof p.then==="function")p.then(()=>{musicNeedsGesture=false}).catch(()=>{});
 }
 function setMusic(on){
   musicOn=!!on;
   localStorage.setItem("card-vault-music",musicOn?"on":"off");
-  updateMusicPlayback();
+  if(musicOn){
+    musicNeedsGesture=false;
+    updateMusicPlayback();
+  }else{
+    themeMusic.pause();
+  }
   syncSettingsUI();
 }
 
 document.addEventListener("visibilitychange",updateMusicPlayback);
 window.addEventListener("pagehide",()=>themeMusic.pause());
 window.addEventListener("pageshow",()=>{if(musicOn)updateMusicPlayback()});
-themeMusic.addEventListener("ended",()=>{if(musicOn&&document.visibilityState==="visible")themeMusic.play().catch(()=>{})});
+window.addEventListener("focus",()=>{if(musicOn)updateMusicPlayback()});
+themeMusic.addEventListener("ended",()=>{if(musicOn&&document.visibilityState==="visible")updateMusicPlayback()});
+// Some browsers block audio autoplay after a complete app/browser restart.
+// Use the first real interaction as an autoplay-unlock fallback.
+["pointerdown","touchstart","keydown"].forEach(type=>document.addEventListener(type,unlockMusic,{passive:true}));
+updateMusicPlayback();
 
 // Settings menu consolidates appearance, music, and visual theme controls.
 function syncSettingsUI(){
