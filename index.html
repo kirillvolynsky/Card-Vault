@@ -3,15 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<meta name="theme-color" content="#111111">
+<meta name="theme-color" content="#0b0b0d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="stylesheet" href="style.css">
 <title>Card Vault</title>
 </head>
 <body>
-<header>
-  <h1>Card Vault</h1>
+<header id="appHeader">
+  <div class="title-wrap">
+    <h1>Card Vault</h1>
+    <button id="folderFilterBtn" class="filter-btn" aria-label="Choose folder">All Cards ▾</button>
+  </div>
   <button id="addBtn" class="primary">＋ Add Card</button>
 </header>
 
@@ -19,18 +24,26 @@
   <section id="empty" class="empty">
     <div class="empty-icon">▣</div>
     <h2>Your cards</h2>
-    <p>Upload any image. Add a back image when you want a two-sided card.</p>
+    <p>Keep your cards private on this device. Add photos from your iPhone and organize them into folders.</p>
     <button id="emptyAdd" class="primary">Add your first card</button>
   </section>
-  <section id="grid" class="grid"></section>
+  <section id="grid" class="grid" aria-label="Cards"></section>
 </main>
 
+<!-- Folder picker -->
+<div id="folderMenu" class="modal hidden" aria-hidden="true">
+  <div class="sheet compact">
+    <div class="sheet-head"><button id="closeFolderMenu">Done</button><h2>Folders</h2><button id="newFolderBtn" class="primary small">＋ New</button></div>
+    <div id="folderList" class="folder-list"></div>
+  </div>
+</div>
+
 <!-- Editor -->
-<div id="editor" class="modal hidden">
+<div id="editor" class="modal hidden" aria-hidden="true">
   <div class="sheet">
     <div class="sheet-head">
       <button id="cancelBtn">Cancel</button>
-      <h2>Add Card</h2>
+      <h2 id="editorTitle">Add Card</h2>
       <button id="doneBtn" class="primary">Done</button>
     </div>
     <div class="frontback">
@@ -39,7 +52,7 @@
         <label class="upload">
           <input id="frontInput" type="file" accept="image/*">
           <img id="frontPreview" alt="">
-          <span id="frontPrompt">＋ Upload front</span>
+          <span id="frontPrompt">＋ Choose from Photos</span>
         </label>
       </div>
       <div class="slot">
@@ -47,17 +60,30 @@
         <label class="upload">
           <input id="backInput" type="file" accept="image/*">
           <img id="backPreview" alt="">
-          <span id="backPrompt">＋ Upload back</span>
+          <span id="backPrompt">＋ Choose from Photos</span>
         </label>
       </div>
     </div>
-    <p class="hint">A card with a back flips when opened. Cards without a back simply show their image.</p>
+    <label class="field-label">Folder
+      <select id="folderSelect"></select>
+    </label>
+    <p class="hint">Your photos stay in this app's local storage on the device. A card with a back flips when opened.</p>
+  </div>
+</div>
+
+<!-- Card actions -->
+<div id="actions" class="modal hidden" aria-hidden="true">
+  <div class="sheet action-sheet">
+    <div class="action-preview"><img id="actionPreview" alt=""></div>
+    <button id="editBtn" class="action">Edit Card</button>
+    <button id="deleteBtn" class="action destructive">Delete Card</button>
+    <button id="cancelActions" class="action cancel-action">Cancel</button>
   </div>
 </div>
 
 <!-- Viewer -->
 <div id="viewer" class="viewer hidden">
-  <button id="closeViewer" class="close">×</button>
+  <button id="closeViewer" class="close" aria-label="Close">×</button>
   <div id="counter"></div>
   <div id="cardStage">
     <div id="card" class="card3d">
@@ -65,7 +91,7 @@
       <div class="face backFace"><img id="viewBack" alt=""></div>
     </div>
   </div>
-  <div class="viewer-help">Swipe left/right to change cards · Tap a two-sided card to flip</div>
+  <div class="viewer-help">Swipe to change · Tap to flip · Pinch to zoom</div>
 </div>
 
 <script src="app.js"></script>
